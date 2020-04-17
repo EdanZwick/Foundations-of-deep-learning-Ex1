@@ -26,12 +26,12 @@ def cross_validate(trainData, trainLabels, kernel):
     if (kernel == 'rbf'):
         param_distribution['gamma'] = np.logspace(-9, 3, 26)
     print('starting cv')
-    selection = RandomizedSearchCV(model, param_distribution, n_iter = 200, n_jobs=-1, verbose=1)
+    selection = RandomizedSearchCV(model, param_distribution, n_iter = 100, n_jobs=-1, verbose=1, cv=3)
     selection.fit(trainData, trainLabels)
     return selection.best_params_
 
 
-# Pretty-prints confusion matrix (taken off s.o.)
+# Pretty-prints confusion matrix (taken off S.O.)
 def confusion(labels, prediction, classes):
     cm = confusion_matrix(labels, prediction)
     df_cm = pd.DataFrame(cm, classes, classes)

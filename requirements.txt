@@ -2,3 +2,5 @@ pytorch
 scikit-learn
 numpy
 matplotlib
+pandas
+seaborn

@@ -1,21 +1,35 @@
 import numpy as np
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 from sklearn import svm
 from sklearn.metrics import confusion_matrix
+from scipy.stats import uniform
 import seaborn as sn
 import pandas as pd
 import matplotlib.pyplot as plt
 
 
-def cross_validate(trainData, trainLabels, kernel, C=0):
+def cross_validate2(trainData, trainLabels, kernel, C=0):
     model = svm.SVC()
     C = np.logspace(-10, 10, num=21) if kernel == 'linear' else C
     params = {'kernel': [kernel], 'C': C}
-    if (kernel == 'RBF'):
+    if (kernel == 'rbf'):
         params['gamma'] = np.logspace(-10, 10, num=21)
     selection = GridSearchCV(model, params, n_jobs=-1, verbose=1)
     selection.fit(trainData, trainLabels)
     return selection.best_params_
+
+
+def cross_validate(trainData, trainLabels, kernel):
+    model = svm.SVC()
+    C = np.logspace(-2, 10, 13)
+    param_distribution = {'kernel': [kernel], 'C': C}
+    if (kernel == 'rbf'):
+        param_distribution['gamma'] = np.logspace(-9, 3, 26)
+    print('starting cv')
+    selection = RandomizedSearchCV(model, param_distribution, n_iter = 200, n_jobs=-1, verbose=1)
+    selection.fit(trainData, trainLabels)
+    return selection.best_params_
+
 
 # Pretty-prints confusion matrix (taken off s.o.)
 def confusion(labels, prediction, classes):

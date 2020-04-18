@@ -23,10 +23,11 @@ class Linear:
         self.w = torch.empty((D_in + 1, D_out), dtype=torch.float).normal_(mean=0, std=std)
         if torch.cuda.is_available():
             self.w = self.w.cuda()
+            self.device = torch.device('cuda')
         self.w.requires_grad = True
 
     def forward(self, x):
-        ones = torch.ones(x.shape[0], 1)
+        ones = torch.ones(x.shape[0], 1, device=self.device)
         x = torch.cat((x, ones), dim=1)  # bias trick, avoids keeping track of two parameters.
         return x.mm(self.w)
 

@@ -4,7 +4,7 @@ import torchvision
 
 class Flatten:
     def __call__(self, sample):
-        return torch.flatten(sample).cuda() if torch.cuda.is_available() else torch.flatten(sample)
+        return torch.flatten(sample)
 
 
 def get_transformation():
@@ -23,11 +23,10 @@ class Linear:
         self.w = torch.empty((D_in + 1, D_out), dtype=torch.float).normal_(mean=0, std=std)
         if torch.cuda.is_available():
             self.w = self.w.cuda()
-            self.device = torch.device('cuda')
         self.w.requires_grad = True
 
     def forward(self, x):
-        ones = torch.ones(x.shape[0], 1, device=self.device)
+        ones = torch.ones(x.shape[0], 1).cuda() if torch.cuda.is_available() else torch.ones(x.shape[0], 1)
         x = torch.cat((x, ones), dim=1)  # bias trick, avoids keeping track of two parameters.
         return x.mm(self.w)
 
@@ -57,9 +56,10 @@ class Net:
 
 
 def grid_search(train_loader, validation_loader, learning_rates, momentum, in_dim, out_dim, hidden_dim):
+    heat_map = [[0 for i in learning_rates] for j in momentum]
     best_loss = 10000000
-    for lr in learning_rates:
-        for m in momentum:
+    for i, lr in enumerate(learning_rates):
+        for j, m in enumerate(momentum):
             net = Net(in_dim, out_dim, hidden_dim, std=1)
             optimizer = torch.optim.SGD(net.params(), lr=lr, momentum=m)
             train(net, train_loader, optimizer)
@@ -68,13 +68,16 @@ def grid_search(train_loader, validation_loader, learning_rates, momentum, in_di
             if validation_loss < best_loss:
                 best_loss = validation_loss
                 best_params = {'lr': lr, 'momentum': m}
-    return best_params, best_loss
+            heat_map[j][i] = validation_loss
+    return best_params, best_loss, heat_map
 
 
 def train(net, loader, optimizer, verbose=False, num_epochs=100):
     for epoch in range(num_epochs):
         epoch_loss = 0
         for i, (batch, target) in enumerate(loader):
+            batch = batch.cuda() if torch.cuda.is_available() else batch
+            target= target.cuda() if torch.cuda.is_available() else target
             optimizer.zero_grad()
             output = net.forward(batch)
             loss = torch.nn.functional.binary_cross_entropy_with_logits(output, target)
@@ -83,13 +86,15 @@ def train(net, loader, optimizer, verbose=False, num_epochs=100):
             epoch_loss += loss * batch.shape[0]  # avg. weighted per sample, as not all batches are equal
         if verbose:
             print('Epoch: {}, loss {}'.format(epoch, epoch_loss/len(loader)))
-        if epoch % 10 == 0:
+        if verbose and epoch % 10 == 0:
             print('epoch: {}'.format(epoch))
 
 
 def run(net, loader):
     loss = 0
     for i, (batch, target) in enumerate(loader):
+        batch = batch.cuda() if torch.cuda.is_available() else batch
+        target= target.cuda() if torch.cuda.is_available() else target
         output = net.forward(batch)
         loss += torch.nn.functional.binary_cross_entropy_with_logits(output, target) * batch.shape[0]
     return loss / len(loader)

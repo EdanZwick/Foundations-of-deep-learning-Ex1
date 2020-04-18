@@ -4,7 +4,7 @@ import torchvision
 
 class Flatten:
     def __call__(self, sample):
-        return torch.flatten(sample)
+        return torch.flatten(sample).cuda() if torch.cuda.is_available() else torch.flatten(sample)
 
 
 def get_transformation():
@@ -20,8 +20,9 @@ class OneHot:
 
 class Linear:
     def __init__(self, D_in, D_out, std):
-        self.w = torch.empty((D_in + 1, D_out), dtype=torch.float,
-                             device='cuda' if torch.cuda.is_available() else 'cpu').normal_(mean=0, std=std)
+        self.w = torch.empty((D_in + 1, D_out), dtype=torch.float).normal_(mean=0, std=std)
+        if torch.cuda.is_available():
+            self.w = self.w.cuda()
         self.w.requires_grad = True
 
     def forward(self, x):

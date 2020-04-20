@@ -74,6 +74,7 @@ def optimizer_grid_search(train_loader, validation_loader, learning_rates, momen
             heat_map[j][i] = validation_loss
     return best_params, best_loss, heat_map
 
+
 def weights_grid_search(train_loader, validation_loader, deviations, in_dim, out_dim, hidden_dim, lr , m):
     heat_map = [0 for j in deviations]
     best_loss = 10000000
@@ -90,23 +91,36 @@ def weights_grid_search(train_loader, validation_loader, deviations, in_dim, out
     return best_param, best_loss, heat_map
 
 
-def train(net, loader, optimizer, verbose=False, num_epochs=100):
+def train(net, loader, optimizer, test_set=None, verbose=False, num_epochs=100):
+    train_losses = []
+    train_accs = []
+    test_losses = []
+    test_accs = []
     for epoch in range(num_epochs):
-        epoch_loss = 0
-        acc = 0
+        train_loss = 0
+        train_acc = 0
         for i, (batch, target) in enumerate(loader):
             batch = batch.cuda() if torch.cuda.is_available() else batch
-            target= target.cuda() if torch.cuda.is_available() else target
+            target = target.cuda() if torch.cuda.is_available() else target
             optimizer.zero_grad()
             output = net.forward(batch)
             loss = torch.nn.functional.binary_cross_entropy_with_logits(output, target)
             loss.backward()
             optimizer.step()
-            acc += (output.argmax(dim=1)==target.argmax(dim=1)).sum().item()
-            epoch_loss += loss * batch.shape[0]  # avg. weighted per sample, as not all batches are equal
+            train_acc += (output.argmax(dim=1) == target.argmax(dim=1)).sum().item()
+            train_loss += loss * batch.shape[0]  # avg. weighted per sample, as not all batches are equal
+        # log this epoch's results
+        train_loss /= len(loader.dataset)
+        train_losses.append(train_loss)
+        train_acc /= len(loader.dataset)
+        train_accs.append(train_acc)
+        if test_set is not None:
+            test_loss, test_acc = run(net, test_set)
+            test_losses.append(test_loss)
+            test_accs.append(test_acc)
         if verbose:
-            print('Epoch: {}, loss {}, acc: {}'.format(epoch, epoch_loss/len(loader.dataset), acc/len(loader.dataset)))
-
+            print('Epoch: {}, loss {}, acc: {}'.format(epoch, train_loss, train_acc))
+        return train_losses, train_accs, test_losses, test_accs
 
 
 def run(net, loader):

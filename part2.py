@@ -58,40 +58,83 @@ class Net:
         return p
 
 
-def optimizer_grid_search(train_loader, validation_loader, learning_rates, momentum, in_dim, out_dim, hidden_dim, std):
-    heat_map = [[0 for i in learning_rates] for j in momentum]
+def optimizer_grid_search(train_loader, validation_loader, learning_rates, momentum, in_dim, out_dim, hidden_dim,
+                          std, num_epochs=75, verbose=False):
+    loss_heat_map = [[0 for i in learning_rates] for j in momentum]
+    acc_heat_map = [[0 for i in learning_rates] for j in momentum]
     best_loss = 10000000
     for i, lr in enumerate(learning_rates):
         for j, m in enumerate(momentum):
             net = Net(in_dim, out_dim, hidden_dim, std=std)
             optimizer = torch.optim.SGD(net.params(), lr=lr, momentum=m)
-            train(net, train_loader, optimizer)
+            train(net, train_loader, optimizer, num_epochs=num_epochs)
             validation_loss, acc = run(net, validation_loader)
-            print('For parameters: lr- {}, momentum- {}, got loss: {}, acc- {}'.format(lr, m, validation_loss, acc))
             if validation_loss < best_loss:
                 best_loss = validation_loss
                 best_params = {'lr': lr, 'momentum': m}
-            heat_map[j][i] = validation_loss
-    return best_params, best_loss, heat_map
+            loss_heat_map[j][i] = validation_loss
+            acc_heat_map[j][i] = acc
+            if verbose:
+                print('For parameters: lr- {}, momentum- {}, got loss: {}, acc- {}'.format(lr, m, validation_loss, acc))
+    return best_params, best_loss, loss_heat_map, acc_heat_map
+
+def adam_grid_search(train_loader, validation_loader, learning_rates, betas, in_dim, out_dim, hidden_dim,
+                     std, num_epochs=75, verbose=False):
+    loss_heat_map = [[0 for i in learning_rates] for j in betas]
+    acc_heat_map = [[0 for i in learning_rates] for j in betas]
+    best_loss = 10000000
+    for i, lr in enumerate(learning_rates):
+        for j, b in enumerate(betas):
+            net = Net(in_dim, out_dim, hidden_dim, std=std)
+            optimizer = torch.optim.Adam(net.params(), lr=lr, betas=b)
+            train(net, train_loader, optimizer, num_epochs=num_epochs)
+            validation_loss, acc = run(net, validation_loader)
+            if validation_loss < best_loss:
+                best_loss = validation_loss
+                best_params = {'lr': lr, 'betas': b}
+            loss_heat_map[j][i] = validation_loss
+            acc_heat_map[j][i] = acc
+            if verbose:
+                print('For parameters: lr- {}, b- {}, got loss: {}, acc- {}'.format(lr, b, validation_loss, acc))
+    return best_params, best_loss, loss_heat_map, acc_heat_map
 
 
-def weights_grid_search(train_loader, validation_loader, deviations, in_dim, out_dim, hidden_dim, lr , m):
+def weights_grid_search(train_loader, validation_loader, deviations, in_dim, out_dim, hidden_dim,
+                        lr, m, num_epochs=75, verbose=False):
     heat_map = [0 for j in deviations]
     best_loss = 10000000
     for i, std in enumerate(deviations):
         net = Net(in_dim, out_dim, hidden_dim, std=std)
         optimizer = torch.optim.SGD(net.params(), lr=lr, momentum=m)
-        train(net, train_loader, optimizer)
+        train(net, train_loader, optimizer, num_epochs=num_epochs)
         validation_loss, acc = run(net, validation_loader)
-        print('For parameter: std- {} got loss: {}, acc: {}'.format(std, validation_loss, acc))
         if validation_loss < best_loss:
             best_loss = validation_loss
             best_param = std
         heat_map[i] = validation_loss
+        if verbose:
+            print('For parameter: std- {} got loss: {}, acc: {}'.format(std, validation_loss, acc))
     return best_param, best_loss, heat_map
 
 
-def train(net, loader, optimizer, test_set=None, verbose=False, num_epochs=100):
+def adam_weights_grid_search(train_loader, validation_loader, deviations, in_dim, out_dim, hidden_dim,
+                        lr, betas, num_epochs=75, verbose=False):
+    heat_map = [0 for j in deviations]
+    best_loss = 10000000
+    for i, std in enumerate(deviations):
+        net = Net(in_dim, out_dim, hidden_dim, std=std)
+        optimizer = torch.optim.Adam(net.params(), lr=lr, betas=betas)
+        train(net, train_loader, optimizer, num_epochs=num_epochs)
+        validation_loss, acc = run(net, validation_loader)
+        if validation_loss < best_loss:
+            best_loss = validation_loss
+            best_param = std
+        heat_map[i] = validation_loss
+        if verbose:
+            print('For parameter: std- {} got loss: {}, acc: {}'.format(std, validation_loss, acc))
+    return best_param, best_loss, heat_map
+
+def train(net, loader, optimizer, test_set=None, verbose=False, num_epochs=75):
     train_losses = []
     train_accs = []
     test_losses = []
@@ -118,9 +161,11 @@ def train(net, loader, optimizer, test_set=None, verbose=False, num_epochs=100):
             test_loss, test_acc = run(net, test_set)
             test_losses.append(test_loss)
             test_accs.append(test_acc)
-        if verbose:
-            print('Epoch: {}, loss {}, acc: {}'.format(epoch, train_loss, train_acc))
-        return train_losses, train_accs, test_losses, test_accs
+            if verbose:
+                print('Epoch: {}, loss: {}, acc: {}, test loss: {}, test acc: {}'.format(epoch, train_loss, train_acc, test_loss, test_acc))
+        elif verbose:
+            print('Epoch: {}, loss: {}, acc: {}, test loss: {}, test acc: {}'.format(epoch, train_loss, train_acc, test_loss, test_acc))
+    return train_losses, train_accs, test_losses, test_accs
 
 
 def run(net, loader):
@@ -136,9 +181,28 @@ def run(net, loader):
 
 
 # Pretty-prints grid search matrix (taken off S.O.)
-def show_heat_map(table, lr, m):
+def show_heat_map(table, lr, m, xlabel='', ylabel='', invert=False):
+    lr = [round(num,4) for num in lr]
+    if type(m[0]) is tuple:
+        m = [tuple([round(x,4) for x in num]) for num in m]
+    else:
+        m = [round(num,4) for num in m]
+    #table = [[round(num, 4) for num in row] for row in table]
     df_table = pd.DataFrame(table, m, lr)
-    # plt.figure(figsize=(10,7))
+    plt.figure(figsize=(15,10))
     sn.set(font_scale=1.4)  # for label size
-    sn.heatmap(df_table, annot=True, annot_kws={"size": 16})  # font size
+    if invert:
+        sn.heatmap(df_table, annot=True, annot_kws={"size": 12}, cmap=sn.cm.rocket_r, fmt='.3g')  # font size
+    else:
+        sn.heatmap(df_table, annot=True, annot_kws={"size": 12}, fmt='.3g')  # font size
+    plt.show()
+
+
+def plot_train_test(train_results, test_results, epochs, label_name, cat1 = 'train ', cat2 = 'test '):
+    ticks = [i for i, _ in enumerate(train_results)]
+    plt.figure(figsize=(15, 10))
+    plt.plot(ticks, train_results, '-b', label=(cat1 + label_name))
+    plt.plot(ticks, test_results, '-r', label= (cat2 + label_name))
+    plt.legend()
+    plt.title('Test and train ' + label_name + ' per epoch')
     plt.show()
